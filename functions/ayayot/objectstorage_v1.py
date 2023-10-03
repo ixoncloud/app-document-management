@@ -21,7 +21,10 @@ def _validate_agent_access(
         return None
 
     assert context.agent.permissions # type hint
-    if check_has_manage_agent and 'MANAGE_AGENT' not in context.agent.permissions:
+    if check_has_manage_agent and (
+            'MANAGE_AGENT' not in context.agent.permissions and
+            'COMPANY_ADMIN' not in context.company.permissions
+        ):
         return None
 
     return {
