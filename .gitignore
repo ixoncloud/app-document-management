@@ -1,6 +1,11 @@
 __pycache__
+htmlcov
 venv
 
 .accesstoken
+.coverage
 .env
 bundle.zip
+coverage.xml
+junit.xml
+link-repos.sh

@@ -1,0 +1,111 @@
+stages:
+  - quality
+  - test
+  - misc
+  - deploy
+  - notify
+
+image: gitlab.ixon.net:4221/ixon/docker/py3.10-alpine3.17-py-test:latest
+
+.deps: &deps
+  before_script:
+    - apk add make
+
+.test-artifacts: &test-artifacts
+  artifacts:
+    # Always expose artifacts
+    when: always
+    name: "$CI_JOB_STAGE-$CI_COMMIT_REF_NAME"
+    paths:
+    # Expose html coverage report as artifact
+    - $CI_PROJECT_DIR/htmlcov
+
+    reports:
+      junit:
+      - $CI_PROJECT_DIR/junit.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: $CI_PROJECT_DIR/coverage.xml
+
+    # Artifacts will be deleted in 1 week after job finished
+    expire_in: 1 week
+
+quality:
+  <<: *deps
+  stage: quality
+  needs: []
+  parallel:
+    matrix:
+      - job:
+          - py-unittest-lint
+          - py-lint
+          - py-unittest-typecheck
+          - py-typecheck
+          - py-bandit
+  script:
+    - make ${job}
+
+unit-tests:
+  <<: *deps
+  <<: *test-artifacts
+  stage: test
+  needs: []
+  coverage: '/TOTAL.* (\d+.\d+\%\s*)$/'
+  script:
+    - make
+      TEST_FLAGS="--without-integration --without-slow-integration --cov-fail-under 100 --cov-report xml --color=yes --junitxml=junit.xml"
+      py-unittest
+
+integration-tests:
+  <<: *deps
+  <<: *test-artifacts
+  stage: test
+  needs: []
+  script:
+    - make 
+      TEST_FLAGS='-m integration_test --color=yes --junitxml=junit.xml' SKIP_COV=1
+      py-unittest
+
+slow-integration-tests:
+  <<: *deps
+  <<: *test-artifacts
+  stage: test
+  needs: []
+  allow_failure: true
+  script:
+    - make 
+      TEST_FLAGS='-m slow_integration_test --color=yes --junitxml=junit.xml' SKIP_COV=1
+      py-unittest
+
+deploy:
+  <<: *deps
+  stage: deploy
+  rules:
+    - if: $CI_COMMIT_TAG && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  when: manual
+  needs: ["quality", "unit-tests", "integration-tests"]
+  artifacts:
+    name: "document-management-$CI_COMMIT_TAG"
+    paths:
+      - bundle.zip
+  script:
+    - |-
+      cat > .env << ENV
+      IXON_API_COMPANY_ID=${IXON_API_COMPANY_ID}
+      IXON_API_TEMPLATE_ID=${IXON_API_TEMPLATE_ID}
+      ENV
+    - cp "${IXON_API_ACCESS_TOKEN_FILE}" .accesstoken
+    - make deploy
+
+notify-pipeline-failure:
+  image: 'alpine:3.18'
+  stage: notify
+  allow_failure: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: on_failure
+  before_script:
+    - apk add jq curl
+  script:
+    - jq -n -c "${CORE_PIPELINE_FAILURE_WEBHOOK_JQ_TEMPLATE}" > body.json
+    - 'curl -sX POST -H "Content-Type: application/json" "${CORE_PIPELINE_FAILURE_WEBHOOK_URL}" --data @body.json > /dev/null'
