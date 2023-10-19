@@ -22,10 +22,9 @@ HTTP_SERVER_BIND="0.0.0.0" make run
 ## Deployment to IXON Cloud
 
 The deployment of the Document Management App is handled mostly via Gitlab CI. After tagging a release,
-run the manual `deploy` job. This job requires the `IXON_API_ACCESS_TOKEN_FILE` to be set to contain
+run the manual `deploy` job. This job requires the `IXON_API_ACCESS_TOKEN` to be set to
 an IXON API access token secret which can upload the cloud function to the IXON Sector 
-Component Owner company (`4094-4607-2800-7692-6007`). Make sure to make this a `File` type environment variable,
-since this is a secret.
+Component Owner company (`4094-4607-2800-7692-6007`).
 
 ## Other commands
 

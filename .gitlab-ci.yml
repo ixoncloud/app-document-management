@@ -94,7 +94,7 @@ deploy:
       IXON_API_COMPANY_ID=${IXON_API_COMPANY_ID}
       IXON_API_TEMPLATE_ID=${IXON_API_TEMPLATE_ID}
       ENV
-    - cp "${IXON_API_ACCESS_TOKEN_FILE}" .accesstoken
+    - echo "${IXON_API_ACCESS_TOKEN}" > .accesstoken
     - make deploy
 
 notify-pipeline-failure:
