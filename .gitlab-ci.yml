@@ -89,7 +89,7 @@ deploy:
     paths:
       - bundle.zip
   script:
-    - apk add zip curl
+    - apk add --update-cache --upgrade zip curl
     - |-
       cat > .env << ENV
       IXON_API_COMPANY_ID=${IXON_API_COMPANY_ID}
