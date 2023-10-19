@@ -4,6 +4,23 @@ PWD := $(shell pwd)
 
 PYTHON_FILES := $(shell find $(CBC_PATH) -type f -name '*.py' -a ! -name 'test_*.py' -a ! -name '*_test.py')
 
+
+# #####
+# PYTEST SETTINGS
+# #####
+
+ifeq (,$(PYTEST_ROOT_DIRECTORY))
+PYTEST_ROOT_DIRECTORY := tests
+endif
+
+ifeq (,$(TEST_FILES))
+TEST_FILES = $(PYTEST_ROOT_DIRECTORY)
+endif
+
+# #####
+# API SETTINGS
+# #####
+
 IXON_API_BASE_URL := https://api.ayayot.com
 IXON_API_VERSION := 2
 IXON_API_APPLICATION_ID := 9J9IZzeT4xN4
@@ -131,9 +148,6 @@ endif
 ifeq ($(IXON_API_TEMPLATE_ID),)
 	$(error IXON Cloud Backend Component Template ID not set, create .env and add IXON_API_TEMPLATE_ID=...)
 endif
-ifeq ($(wildcard .accesstoken),)
-    $(error No .accesstoken file found; create .accesstoken and enter a valid access token)
-endif
 	curl -X POST \
 		-H "api-version: $(IXON_API_VERSION)" \
 		-H "api-application: $(IXON_API_APPLICATION_ID)" \
@@ -142,6 +156,34 @@ endif
 		--data-binary @bundle.zip \
 		$(IXON_API_BASE_URL)/backend-component-templates/$(IXON_API_TEMPLATE_ID)/version-upload
 
+py-lint: py-venv-dev
+	$(PYTHON_BIN) -m pylint --source-roots=. $(CBC_PATH)
+
+py-unittest-lint: py-venv-dev
+	$(PYTHON_BIN) -m pylint --rcfile=tests/pylintrc --source-roots=. $(TEST_FILES)
+
+py-typecheck: py-venv-dev
+	$(PYTHON_BIN) -m mypy $(CBC_PATH)
+
+py-unittest-typecheck: py-venv-dev
+	$(PYTHON_BIN) -m mypy $(TEST_FILES)
+
+py-bandit: py-venv-dev
+	$(PYTHON_BIN) -m bandit -c bandit.yaml -r $(CBC_PATH)
+
+# Run the unit tests
+ifndef SKIP_COV
+py-unittest: override TEST_FLAGS+=--cov-branch --cov-report html --cov-report term --cov=$(CBC_PATH)
+endif
+py-unittest: py-venv-dev
+	$(PYTHON_BIN) -m pytest $(TEST_FLAGS) $(TEST_FILES)
+
+py-test: py-unittest py-typecheck py-lint py-bandit py-unittest-typecheck py-unittest-lint
+
 # Run the ixoncdkingress
 run: py-venv-dev
 	CBC_PATH=$(CBC_PATH) $(PYTHON_BIN) -m ixoncdkingress
+
+.PHONY: py-venv-dev py-distclean bundle deploy py-lint \
+		py-test-lint py-typecheck py-test-typecheck py-bandit \
+		py-unittest py-test run

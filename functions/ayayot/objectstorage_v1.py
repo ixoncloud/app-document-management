@@ -1,67 +1,154 @@
 """
-Reserve API to handle access checks for the object storage.
+API that authorizes access to objects in object storage
 """
+from ixoncdkingress.cbc.context import CbcContext, CbcResource
+from ixoncdkingress.cbc.objectstorage.types import ResourceType, PathMapping, PathResponse, \
+    ListPathResponse, PathData
 
-from typing import Dict
 
-from ixoncdkingress.cbc.context import CbcContext
-
-def _validate_agent_access(
-        context: CbcContext,
-        check_has_manage_agent: bool = True,
-    ) -> Dict[str, str | Dict[str, str]] | None:
+def _has_access_to_files_of_resource(
+        company: CbcResource,
+        resource: CbcResource,
+    ) -> bool:
     """
-    Validates if the Cloud function is being called scoped to an agent and
-    optionally validates if the caller has MANAGE_AGENT permissions.
-
-    Returns None if the caller shouldn't have access else returns the path
-    to the blob.
+    Validates if the caller is authorized to access files for the given
+    resource.
     """
-    if not context.agent:
+    assert resource.permissions is not None  # type hint
+    assert company.permissions is not None  # type hint
+    if (
+            'MANAGE_AGENT' not in resource.permissions and
+            'COMPANY_ADMIN' not in company.permissions
+        ):
+        return False
+
+    return True
+
+def _format_path_for_resource(resource: CbcResource, typ: ResourceType) -> str:
+    """
+    Formats the path at which files for the given resource are stored
+    """
+    root = 'assets'
+
+    if typ != ResourceType.ASSET:
+        root = 'agents'
+
+    return f'{root}/{resource.public_id}/'
+
+def _create_single_response(
+        resource: CbcResource, typ: ResourceType,
+    ) -> PathResponse:
+    """
+    Creates a single-path response, as is
+    used by authorize_upload, authorize_download & authorize_delete
+    """
+    return PathResponse(
+        result='success',
+        data=PathData(
+            path=_format_path_for_resource(resource, typ),
+        ),
+    )
+
+def _create_mapping_for_resource(res: tuple[CbcResource, ResourceType]):
+    resource, typ = res
+    return PathMapping(
+        publicId=resource.public_id,
+        type=typ,
+        path=_format_path_for_resource(resource, typ)
+    )
+
+def _create_multi_response(
+        resources: list[tuple[CbcResource, ResourceType]]
+    ) -> ListPathResponse:
+    """
+    Creates a multi-path response, as is used by authorize_list
+    """
+    mappings = map(_create_mapping_for_resource, resources)
+
+    return ListPathResponse(
+        result='success',
+        data=list(mappings),
+    )
+
+def _request_for(context: CbcContext) -> tuple[CbcResource, ResourceType] | None:
+    """
+    Detects the target resource of the request, preferring assets to agents.
+    Will also return the type of the resource.
+    """
+    # A company is required in all cases
+    if not context.company:
         return None
 
-    assert context.agent.permissions is not None # type hint
-    if check_has_manage_agent and (
-            'MANAGE_AGENT' not in context.agent.permissions and
-            'COMPANY_ADMIN' not in context.company.permissions
+    target = context.agent
+    typ = ResourceType.AGENT
+
+    if context.asset:
+        target = context.asset
+        typ = ResourceType.ASSET
+
+    if not target:
+        return None
+
+    return target, typ
+
+def _authorize_single(context: CbcContext, check_has_manage: bool) -> PathResponse | None:
+    if (target_typ := _request_for(context)) is None:
+        return None
+
+    target, typ = target_typ
+
+    assert context.company  # type check
+
+    if check_has_manage and not _has_access_to_files_of_resource(
+            context.company,
+            target,
         ):
         return None
 
-    return {
-        'result': 'success',
-        'data': {
-            'path': f'agents/{context.agent.public_id}/',
-        }
-    }
+    return _create_single_response(target, typ)
 
 @CbcContext.expose
-def authorize_upload(context: CbcContext):
+def authorize_upload(context: CbcContext) -> PathResponse | None:
     """
     Method to validate if and where the caller is allowed
     to upload a blob to the object storage.
     """
-    return _validate_agent_access(context)
+    return _authorize_single(context, True)
 
 @CbcContext.expose
-def authorize_list(context: CbcContext):
+def authorize_list(
+        context: CbcContext
+    ) -> ListPathResponse | None:
     """
     Method to validate if and where the caller is allowed
     to get the blob list from the object storage.
     """
-    return _validate_agent_access(context, False)
+    if (target_typ := _request_for(context)) is None:
+        return None
+
+    target, typ = target_typ
+
+    resources = [(target, typ)]
+
+    # If the target was an asset with a linked agent,
+    # we should also return a path mapping for that agent
+    if typ == ResourceType.ASSET and context.agent is not None:
+        resources.append((context.agent, ResourceType.AGENT))
+
+    return _create_multi_response(resources)
 
 @CbcContext.expose
-def authorize_download(context: CbcContext):
+def authorize_download(context: CbcContext) -> PathResponse | None:
     """
     Method to validate if and where the caller is allowed
     to download a blob from the object storage.
     """
-    return _validate_agent_access(context, False)
+    return _authorize_single(context, False)
 
 @CbcContext.expose
-def authorize_delete(context: CbcContext):
+def authorize_delete(context: CbcContext) -> PathResponse | None:
     """
     Method to validate if and where the caller is allowed
     to delete a blob from the object storage.
     """
-    return _validate_agent_access(context)
+    return _authorize_single(context, True)
