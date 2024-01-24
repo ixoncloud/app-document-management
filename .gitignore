@@ -1,10 +1,16 @@
 __pycache__
 htmlcov
 venv
+dist
+node_modules
 
 .accesstoken
 .coverage
 .env
+.DS_Store
+.vscode
+*.pyc
+
 bundle.zip
 coverage.xml
 junit.xml

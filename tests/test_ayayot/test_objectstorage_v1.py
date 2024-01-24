@@ -3,8 +3,8 @@ from unittest import mock
 
 import pytest
 
-from ixoncdkingress.cbc.objectstorage.types import PathResponse
-from ixoncdkingress.cbc.context import CbcContext, CbcResource
+from ixoncdkingress.function.objectstorage.types import PathResponse
+from ixoncdkingress.function.context import FunctionContext, FunctionResource
 
 from functions.ayayot import objectstorage_v1 as sut
 
@@ -16,8 +16,8 @@ from functions.ayayot import objectstorage_v1 as sut
 def test__has_access_to_files_of_resource(company_perms, res_perms, expected):
     mut = sut._has_access_to_files_of_resource
 
-    company = mock.create_autospec(CbcResource, instance=True)
-    resource = mock.create_autospec(CbcResource, instance=True)
+    company = mock.create_autospec(FunctionResource, instance=True)
+    resource = mock.create_autospec(FunctionResource, instance=True)
 
     company.permissions = company_perms
     resource.permissions = res_perms
@@ -31,7 +31,7 @@ def test__has_access_to_files_of_resource(company_perms, res_perms, expected):
 def test__format_path_for_resource(pubid, typ, expected):
     mut = sut._format_path_for_resource
 
-    resource = mock.create_autospec(CbcResource, instance=True)
+    resource = mock.create_autospec(FunctionResource, instance=True)
     resource.public_id = pubid
 
     output = mut(resource, typ)
@@ -62,11 +62,11 @@ def test__create_single_response(_format_path_for_resource: mock.Mock):
 def test__create_multi_response(_format_path_for_resource: mock.Mock):
     mut = sut._create_multi_response
 
-    res1 = mock.create_autospec(spec=CbcResource, instance=True)
+    res1 = mock.create_autospec(spec=FunctionResource, instance=True)
     res1.public_id = mock.sentinel.pubid1
     type1 = mock.sentinel.type1
 
-    res2 = mock.create_autospec(spec=CbcResource, instance=True)
+    res2 = mock.create_autospec(spec=FunctionResource, instance=True)
     res2.public_id = mock.sentinel.pubid2
     type2 = mock.sentinel.type2
 
@@ -101,7 +101,7 @@ def test__create_multi_response(_format_path_for_resource: mock.Mock):
 def test__request_for_agent():
     mut = sut._request_for
 
-    context = mock.create_autospec(spec=CbcContext, spec_set=True, instance=True)
+    context = mock.create_autospec(spec=FunctionContext, spec_set=True, instance=True)
     context.asset = None
 
     output = mut(context)
@@ -111,7 +111,7 @@ def test__request_for_agent():
 def test__request_for_asset():
     mut = sut._request_for
 
-    context = mock.create_autospec(spec=CbcContext, spec_set=True, instance=True)
+    context = mock.create_autospec(spec=FunctionContext, spec_set=True, instance=True)
 
     output = mut(context)
 
@@ -120,7 +120,7 @@ def test__request_for_asset():
 def test__request_for_no_company():
     mut = sut._request_for
 
-    context = mock.create_autospec(spec=CbcContext, instance=True)
+    context = mock.create_autospec(spec=FunctionContext, instance=True)
     context.company = None
 
     assert None is mut(context)
@@ -128,7 +128,7 @@ def test__request_for_no_company():
 def test__request_for_no_target():
     mut = sut._request_for
 
-    context = mock.create_autospec(spec=CbcContext, spec_set=True, instance=True)
+    context = mock.create_autospec(spec=FunctionContext, spec_set=True, instance=True)
     context.agent = None
     context.asset = None
 
@@ -151,7 +151,7 @@ def test__authorize_single(
 
     _request_for.return_value = (mock.sentinel.target, mock.sentinel.type)
 
-    context = mock.create_autospec(spec=CbcContext, instance=True)
+    context = mock.create_autospec(spec=FunctionContext, instance=True)
 
     output = mut(context, check_has_manage=check)
 
@@ -182,7 +182,7 @@ def test__authorize_single_no_target(
 
     _request_for.return_value = None
 
-    context = mock.create_autospec(spec=CbcContext, instance=True)
+    context = mock.create_autospec(spec=FunctionContext, instance=True)
 
     assert None is mut(context, check_has_manage=mock.sentinel.check_has_manage)
 
@@ -205,7 +205,7 @@ def test__authorize_single_no_access(
     _request_for.return_value = (mock.sentinel.target, mock.sentinel.type)
     _has_access_to_files_of_resource.return_value = False
 
-    context = mock.create_autospec(spec=CbcContext, instance=True)
+    context = mock.create_autospec(spec=FunctionContext, instance=True)
 
     output = mut(context, check_has_manage=True)
 
@@ -232,10 +232,10 @@ def test__authorize_single_no_access(
 @mock.patch('functions.ayayot.objectstorage_v1._authorize_single', autospec=True)
 def test_authorize_upload_download_delete(
         _authorize_single: mock.Mock,
-        mut: Callable[[CbcContext], PathResponse],
+        mut: Callable[[FunctionContext], PathResponse],
         check_has_manage: bool,
     ):
-    context = mock.create_autospec(spec=CbcContext, instance=True)
+    context = mock.create_autospec(spec=FunctionContext, instance=True)
 
     output = mut(context)
 
@@ -255,7 +255,7 @@ def test_authorize_list_agent(
 
     _request_for.return_value = (mock.sentinel.target, sut.ResourceType.AGENT)
 
-    context = mock.create_autospec(spec=CbcContext, instance=True)
+    context = mock.create_autospec(spec=FunctionContext, instance=True)
 
     output = mut(context)
 
@@ -279,7 +279,7 @@ def test_authorize_list_asset_with_linked_agent(
 
     _request_for.return_value = (mock.sentinel.target, sut.ResourceType.ASSET)
 
-    context = mock.create_autospec(spec=CbcContext, instance=True)
+    context = mock.create_autospec(spec=FunctionContext, instance=True)
 
     output = mut(context)
 
@@ -306,7 +306,7 @@ def test_authorize_list_asset_without_linked_agent(
 
     _request_for.return_value = (mock.sentinel.target, sut.ResourceType.ASSET)
 
-    context = mock.create_autospec(spec=CbcContext, instance=True)
+    context = mock.create_autospec(spec=FunctionContext, instance=True)
     context.agent = None
 
     output = mut(context)
@@ -333,7 +333,7 @@ def test_authorize_list_no_target(
 
     _request_for.return_value = None
 
-    context = mock.create_autospec(spec=CbcContext)
+    context = mock.create_autospec(spec=FunctionContext)
 
     output = mut(context)
 
@@ -348,13 +348,13 @@ def test_authorize_list_no_target(
 @pytest.mark.integration_test
 @pytest.mark.parametrize('asset,agent', [
     pytest.param(
-        CbcResource(
+        FunctionResource(
             public_id='assetpubid01',
             name='Asset',
             custom_properties={},
             permissions=set(),
         ),
-        CbcResource(
+        FunctionResource(
             public_id='agentpubid01',
             name='Agent',
             custom_properties={},
@@ -363,7 +363,7 @@ def test_authorize_list_no_target(
         id='with-linked-agent',
     ),
     pytest.param(
-        CbcResource(
+        FunctionResource(
             public_id='assetpubid01',
             name='Asset',
             custom_properties={},
@@ -383,13 +383,13 @@ def test_authorize_list_no_target(
     sut.authorize_delete,
 ])
 def test_authorize_upload_download_delete_asset_integration(
-        mut: Callable[[CbcContext], PathResponse],
-        asset: CbcResource,
-        agent: CbcResource,
+        mut: Callable[[FunctionContext], PathResponse],
+        asset: FunctionResource,
+        agent: FunctionResource,
         asset_perms: set[str],
         company_perms: set[str],
     ):
-    context = mock.create_autospec(spec=CbcContext, spec_set=True, instance=True)
+    context = mock.create_autospec(spec=FunctionContext, spec_set=True, instance=True)
 
     context.company.permissions = company_perms
     context.asset = asset
@@ -411,23 +411,23 @@ def test_authorize_upload_download_delete_asset_integration(
     sut.authorize_delete,
 ])
 def test_authorize_upload_delete_asset_no_permission_integration(
-        mut: Callable[[CbcContext], PathResponse],
+        mut: Callable[[FunctionContext], PathResponse],
     ):
-    context = mock.create_autospec(spec=CbcContext, spec_set=True, instance=True)
+    context = mock.create_autospec(spec=FunctionContext, spec_set=True, instance=True)
 
-    context.asset = CbcResource(
+    context.asset = FunctionResource(
         public_id='assetpubid01',
         name='Asset',
         custom_properties={},
         permissions=set(),
     )
-    context.agent = CbcResource(
+    context.agent = FunctionResource(
         public_id='agentpubid01',
         name='Agent',
         custom_properties={},
         permissions=set(),
     )
-    context.company = CbcResource(
+    context.company = FunctionResource(
         public_id='',
         name='Company',
         custom_properties={},
@@ -448,7 +448,7 @@ def test_authorize_list_agent_integration(
     ):
     mut = sut.authorize_list
 
-    context = mock.create_autospec(spec=CbcContext, spec_set=True, instance=True)
+    context = mock.create_autospec(spec=FunctionContext, spec_set=True, instance=True)
     context.company.permissions = company_perms
     context.asset = None
     context.agent.public_id = 'agentpubid01'
@@ -471,7 +471,7 @@ def test_authorize_list_agent_integration(
 def test_authorize_list_asset_with_linked_agent_integration():
     mut = sut.authorize_list
 
-    context = mock.create_autospec(spec=CbcContext, spec_set=True, instance=True)
+    context = mock.create_autospec(spec=FunctionContext, spec_set=True, instance=True)
 
     context.asset.public_id = 'assetpubid01'
     context.agent.public_id = 'agentpubid01'
@@ -498,7 +498,7 @@ def test_authorize_list_asset_with_linked_agent_integration():
 def test_authorize_list_asset_without_linked_agent_integration():
     mut = sut.authorize_list
 
-    context = mock.create_autospec(spec=CbcContext, spec_set=True, instance=True)
+    context = mock.create_autospec(spec=FunctionContext, spec_set=True, instance=True)
 
     context.asset.public_id = 'assetpubid01'
     context.agent = None
