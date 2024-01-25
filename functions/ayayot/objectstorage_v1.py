@@ -1,14 +1,14 @@
 """
 API that authorizes access to objects in object storage
 """
-from ixoncdkingress.cbc.context import CbcContext, CbcResource
-from ixoncdkingress.cbc.objectstorage.types import ResourceType, PathMapping, PathResponse, \
+from ixoncdkingress.function.context import FunctionContext, FunctionResource
+from ixoncdkingress.function.objectstorage.types import ResourceType, PathMapping, PathResponse, \
     ListPathResponse, PathData
 
 
 def _has_access_to_files_of_resource(
-        company: CbcResource,
-        resource: CbcResource,
+        company: FunctionResource,
+        resource: FunctionResource,
     ) -> bool:
     """
     Validates if the caller is authorized to access files for the given
@@ -24,7 +24,7 @@ def _has_access_to_files_of_resource(
 
     return True
 
-def _format_path_for_resource(resource: CbcResource, typ: ResourceType) -> str:
+def _format_path_for_resource(resource: FunctionResource, typ: ResourceType) -> str:
     """
     Formats the path at which files for the given resource are stored
     """
@@ -36,7 +36,7 @@ def _format_path_for_resource(resource: CbcResource, typ: ResourceType) -> str:
     return f'{root}/{resource.public_id}/'
 
 def _create_single_response(
-        resource: CbcResource, typ: ResourceType,
+        resource: FunctionResource, typ: ResourceType,
     ) -> PathResponse:
     """
     Creates a single-path response, as is
@@ -49,7 +49,7 @@ def _create_single_response(
         ),
     )
 
-def _create_mapping_for_resource(res: tuple[CbcResource, ResourceType]):
+def _create_mapping_for_resource(res: tuple[FunctionResource, ResourceType]):
     resource, typ = res
     return PathMapping(
         publicId=resource.public_id,
@@ -58,7 +58,7 @@ def _create_mapping_for_resource(res: tuple[CbcResource, ResourceType]):
     )
 
 def _create_multi_response(
-        resources: list[tuple[CbcResource, ResourceType]]
+        resources: list[tuple[FunctionResource, ResourceType]]
     ) -> ListPathResponse:
     """
     Creates a multi-path response, as is used by authorize_list
@@ -70,7 +70,7 @@ def _create_multi_response(
         data=list(mappings),
     )
 
-def _request_for(context: CbcContext) -> tuple[CbcResource, ResourceType] | None:
+def _request_for(context: FunctionContext) -> tuple[FunctionResource, ResourceType] | None:
     """
     Detects the target resource of the request, preferring assets to agents.
     Will also return the type of the resource.
@@ -91,7 +91,7 @@ def _request_for(context: CbcContext) -> tuple[CbcResource, ResourceType] | None
 
     return target, typ
 
-def _authorize_single(context: CbcContext, check_has_manage: bool) -> PathResponse | None:
+def _authorize_single(context: FunctionContext, check_has_manage: bool) -> PathResponse | None:
     if (target_typ := _request_for(context)) is None:
         return None
 
@@ -107,17 +107,17 @@ def _authorize_single(context: CbcContext, check_has_manage: bool) -> PathRespon
 
     return _create_single_response(target, typ)
 
-@CbcContext.expose
-def authorize_upload(context: CbcContext) -> PathResponse | None:
+@FunctionContext.expose
+def authorize_upload(context: FunctionContext) -> PathResponse | None:
     """
     Method to validate if and where the caller is allowed
     to upload a blob to the object storage.
     """
     return _authorize_single(context, True)
 
-@CbcContext.expose
+@FunctionContext.expose
 def authorize_list(
-        context: CbcContext
+        context: FunctionContext
     ) -> ListPathResponse | None:
     """
     Method to validate if and where the caller is allowed
@@ -137,16 +137,16 @@ def authorize_list(
 
     return _create_multi_response(resources)
 
-@CbcContext.expose
-def authorize_download(context: CbcContext) -> PathResponse | None:
+@FunctionContext.expose
+def authorize_download(context: FunctionContext) -> PathResponse | None:
     """
     Method to validate if and where the caller is allowed
     to download a blob from the object storage.
     """
     return _authorize_single(context, False)
 
-@CbcContext.expose
-def authorize_delete(context: CbcContext) -> PathResponse | None:
+@FunctionContext.expose
+def authorize_delete(context: FunctionContext) -> PathResponse | None:
     """
     Method to validate if and where the caller is allowed
     to delete a blob from the object storage.
