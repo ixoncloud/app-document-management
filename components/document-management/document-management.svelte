@@ -6,7 +6,7 @@
     ResourceDataClient,
   } from '@ixon-cdk/types';
 
-  import { formatBytesValue } from './common/formatters/format-bytes/format-bytes.utils';
+  import { formatBytesValue } from './formatters/format-bytes/format-bytes.utils';
 
   import { naturalSort } from './lib/natural-sort';
   import { onMount } from 'svelte';
@@ -66,8 +66,12 @@
       },
     );
 
-    const list = await objectStorageClient.getList();
-    objects = list.entries;
+    try {
+      const list = await objectStorageClient.getList();
+      objects = list.entries;
+    } catch (e) {
+      objects = [];
+    }
 
     width = rootEl.getBoundingClientRect().width;
     const resizeObserver = new ResizeObserver(entries => {
@@ -109,22 +113,27 @@
         file.name,
         files.map(f => f.name),
       );
-      const uploadResult = await objectStorageClient.store(file, {
-        tags: {
-          name: filename,
-        },
-      });
 
-      objects = [
-        ...objects,
-        {
-          uuid: uploadResult.identifier,
-          size: file.size,
+      try {
+        const uploadResult = await objectStorageClient.store(file, {
           tags: {
             name: filename,
           },
-        },
-      ];
+        });
+
+        objects = [
+          ...objects,
+          {
+            uuid: uploadResult.identifier,
+            size: file.size,
+            tags: {
+              name: filename,
+            },
+          },
+        ];
+      } catch (e) {
+        // Nothing to do
+      }
     }
   }
 
@@ -133,8 +142,12 @@
     if (!meta) {
       return;
     }
-    const file = await objectStorageClient.getBlob(objectMeta);
-    context.saveAsFile(file, meta.name);
+    try {
+      const file = await objectStorageClient.getBlob(objectMeta);
+      context.saveAsFile(file, meta.name);
+    } catch (e) {
+      // Nothing to do
+    }
   }
 
   async function handleRemoveDocumentButtonClick(
@@ -150,8 +163,12 @@
       destructive: true,
     });
     if (confirmed) {
-      await objectStorageClient.delete(file.meta);
-      objects = objects.filter(f => f !== file.meta);
+      try {
+        await objectStorageClient.delete(file.meta);
+        objects = objects.filter(f => f !== file.meta);
+      } catch (e) {
+        // Nothing to do
+      }
     }
   }
 
