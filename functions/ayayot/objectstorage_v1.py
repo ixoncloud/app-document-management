@@ -70,6 +70,36 @@ def _create_multi_response(
         data=list(mappings),
     )
 
+
+def _add_asset_descendant_resources(
+    context: FunctionContext,
+    resources: list[tuple[FunctionResource, ResourceType]],
+) -> None:
+    """
+    Adds all resources that are descendants of the given asset to the given resources list
+    """
+    for resource, r_type in resources:
+        if r_type == ResourceType.ASSET:
+            result = context.api_client.get(
+                "AssetDescendantList",
+                {"publicId": resource.public_id, "fields": "publicId,name"},
+            )["data"]
+            resources.extend(
+                [
+                    (
+                        FunctionResource(
+                            public_id=res["publicId"],
+                            name=res["name"],
+                            custom_properties={},
+                            permissions=set(),
+                        ),
+                        ResourceType.ASSET,
+                    )
+                    for res in result
+                ]
+            )
+
+
 def _request_for(context: FunctionContext) -> tuple[FunctionResource, ResourceType] | None:
     """
     Detects the target resource of the request, preferring assets to agents.
@@ -134,6 +164,8 @@ def authorize_list(
     # we should also return a path mapping for that agent
     if typ == ResourceType.ASSET and context.agent is not None:
         resources.append((context.agent, ResourceType.AGENT))
+
+    _add_asset_descendant_resources(context, resources)
 
     return _create_multi_response(resources)
 
