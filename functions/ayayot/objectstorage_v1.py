@@ -78,13 +78,14 @@ def _add_asset_descendant_resources(
     """
     Adds all resources that are descendants of the given asset to the given resources list
     """
+    children: list[tuple[FunctionResource, ResourceType]] = []
     for resource, r_type in resources:
         if r_type == ResourceType.ASSET:
-            result = context.api_client.get(
+            result: list[dict[str, str]] = context.api_client.get(
                 "AssetDescendantList",
                 {"publicId": resource.public_id, "fields": "publicId,name"},
             )["data"]
-            resources.extend(
+            children.extend(
                 [
                     (
                         FunctionResource(
@@ -98,6 +99,8 @@ def _add_asset_descendant_resources(
                     for res in result
                 ]
             )
+
+    resources.extend(children)
 
 
 def _request_for(context: FunctionContext) -> tuple[FunctionResource, ResourceType] | None:
@@ -157,7 +160,6 @@ def authorize_list(
         return None
 
     target, typ = target_typ
-
     resources = [(target, typ)]
 
     # If the target was an asset with a linked agent,
