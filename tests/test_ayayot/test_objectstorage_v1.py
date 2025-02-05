@@ -3,6 +3,7 @@ from unittest import mock
 
 import pytest
 
+from ixoncdkingress.function.api_client import ApiClient
 from ixoncdkingress.function.objectstorage.types import PathResponse
 from ixoncdkingress.function.context import FunctionContext, FunctionResource
 
@@ -269,12 +270,16 @@ def test_authorize_list_agent(
         mock.call([(mock.sentinel.target, sut.ResourceType.AGENT)])
     ] == _create_multi_response.call_args_list
 
+@mock.patch(
+    "functions.ayayot.objectstorage_v1._add_asset_descendant_resources", autospec=True
+)
 @mock.patch('functions.ayayot.objectstorage_v1._create_multi_response', autospec=True)
 @mock.patch('functions.ayayot.objectstorage_v1._request_for', autospec=True)
 def test_authorize_list_asset_with_linked_agent(
-        _request_for: mock.Mock,
-        _create_multi_response: mock.Mock,
-    ):
+    _request_for: mock.Mock,
+    _create_multi_response: mock.Mock,
+    _add_asset_descendant_resources: mock.Mock,
+):
     mut = sut.authorize_list
 
     _request_for.return_value = (mock.sentinel.target, sut.ResourceType.ASSET)
@@ -290,18 +295,32 @@ def test_authorize_list_asset_with_linked_agent(
     ] == _request_for.call_args_list
 
     assert [
+        mock.call(
+            context,
+            [
+                (mock.sentinel.target, sut.ResourceType.ASSET),
+                (context.agent, sut.ResourceType.AGENT),
+            ],
+        ),
+    ] == _add_asset_descendant_resources.call_args_list
+
+    assert [
         mock.call([
             (mock.sentinel.target, sut.ResourceType.ASSET),
             (context.agent, sut.ResourceType.AGENT),
         ])
     ] == _create_multi_response.call_args_list
 
+@mock.patch(
+    "functions.ayayot.objectstorage_v1._add_asset_descendant_resources", autospec=True
+)
 @mock.patch('functions.ayayot.objectstorage_v1._create_multi_response', autospec=True)
 @mock.patch('functions.ayayot.objectstorage_v1._request_for', autospec=True)
 def test_authorize_list_asset_without_linked_agent(
-        _request_for: mock.Mock,
-        _create_multi_response: mock.Mock,
-    ):
+    _request_for: mock.Mock,
+    _create_multi_response: mock.Mock,
+    _add_asset_descendant_resources: mock.Mock,
+):
     mut = sut.authorize_list
 
     _request_for.return_value = (mock.sentinel.target, sut.ResourceType.ASSET)
@@ -316,6 +335,10 @@ def test_authorize_list_asset_without_linked_agent(
     assert [
         mock.call(context)
     ] == _request_for.call_args_list
+
+    assert [
+        mock.call(context, [(mock.sentinel.target, sut.ResourceType.ASSET)]),
+    ] == _add_asset_descendant_resources.call_args_list
 
     assert [
         mock.call([
@@ -344,6 +367,57 @@ def test_authorize_list_no_target(
     ] == _request_for.call_args_list
 
     assert [] == _create_multi_response.call_args_list
+
+def test__add_asset_descendant_resources():
+    mut = sut._add_asset_descendant_resources
+
+    context = mock.create_autospec(spec=FunctionContext, instance=True)
+    context.api_client = mock.create_autospec(spec=ApiClient, instance=True)
+
+    context.api_client.get.return_value = {
+        "data": [
+            {"publicId": "assetpubid02", "name": "Asset"},
+        ]
+    }
+
+    asset0 = (
+        FunctionResource(
+            public_id="assetpubid01",
+            name="Asset",
+            custom_properties={},
+            permissions=set(),
+        ),
+        sut.ResourceType.ASSET,
+    )
+    agent0 = (
+        FunctionResource(
+            public_id="agentpubid01",
+            name="Agent",
+            custom_properties={},
+            permissions=set(),
+        ),
+        sut.ResourceType.AGENT,
+    )
+
+    resources = [asset0, agent0]
+
+    mut(context, resources)
+
+    assert repr(
+        [
+            asset0,
+            agent0,
+            (
+                FunctionResource(
+                    public_id="assetpubid02",
+                    name="Asset",
+                    custom_properties={},
+                    permissions=set(),
+                ),
+                sut.ResourceType.ASSET,
+            ),
+        ]
+    ) == repr(resources)
 
 @pytest.mark.integration_test
 @pytest.mark.parametrize('asset,agent', [
@@ -471,7 +545,8 @@ def test_authorize_list_agent_integration(
 def test_authorize_list_asset_with_linked_agent_integration():
     mut = sut.authorize_list
 
-    context = mock.create_autospec(spec=FunctionContext, spec_set=True, instance=True)
+    context = mock.create_autospec(spec=FunctionContext, instance=True)
+    context.api_client = mock.create_autospec(spec=ApiClient, instance=True)
 
     context.asset.public_id = 'assetpubid01'
     context.agent.public_id = 'agentpubid01'
@@ -498,7 +573,8 @@ def test_authorize_list_asset_with_linked_agent_integration():
 def test_authorize_list_asset_without_linked_agent_integration():
     mut = sut.authorize_list
 
-    context = mock.create_autospec(spec=FunctionContext, spec_set=True, instance=True)
+    context = mock.create_autospec(spec=FunctionContext, instance=True)
+    context.api_client = mock.create_autospec(spec=ApiClient, instance=True)
 
     context.asset.public_id = 'assetpubid01'
     context.agent = None
@@ -514,6 +590,37 @@ def test_authorize_list_asset_without_linked_agent_integration():
                 "publicId": "assetpubid01",
                 "type": "Asset",
                 "path": "assets/assetpubid01/",
+            },
+        ],
+    } == output
+
+@pytest.mark.integration_test
+def test_authorize_list_asset_with_other_assets():
+    mut = sut.authorize_list
+
+    context = mock.create_autospec(spec=FunctionContext, instance=True)
+    context.api_client = mock.create_autospec(spec=ApiClient, instance=True)
+
+    context.asset.public_id = "assetpubid01"
+    context.agent = None
+    context.api_client.get.return_value = {
+        "data": [{"publicId": "assetpubid02", "name": "Asset"}]
+    }
+
+    output = mut(context)
+
+    assert {
+        "result": "success",
+        "data": [
+            {
+                "publicId": "assetpubid01",
+                "type": "Asset",
+                "path": "assets/assetpubid01/",
+            },
+            {
+                "publicId": "assetpubid02",
+                "type": "Asset",
+                "path": "assets/assetpubid02/",
             },
         ],
     } == output
