@@ -180,6 +180,14 @@ def authorize_download(context: FunctionContext) -> PathResponse | None:
     return _authorize_single(context, False)
 
 @FunctionContext.expose
+def authorize_update(context: FunctionContext) -> PathResponse | None:
+    """
+    Method to validate if and where the caller is allowed
+    to update a blob in the object storage.
+    """
+    return _authorize_single(context, True)
+
+@FunctionContext.expose
 def authorize_delete(context: FunctionContext) -> PathResponse | None:
     """
     Method to validate if and where the caller is allowed
