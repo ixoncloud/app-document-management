@@ -12,6 +12,7 @@ node_modules
 *.pyc
 
 bundle.zip
+context_values.json
 coverage.xml
 junit.xml
 link-repos.sh
