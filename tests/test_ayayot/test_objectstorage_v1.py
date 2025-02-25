@@ -228,10 +228,11 @@ def test__authorize_single_no_access(
 @pytest.mark.parametrize('mut,check_has_manage', [
     (sut.authorize_upload, True),
     (sut.authorize_download, False),
+    (sut.authorize_update, True),
     (sut.authorize_delete, True),
 ])
 @mock.patch('functions.ayayot.objectstorage_v1._authorize_single', autospec=True)
-def test_authorize_upload_download_delete(
+def test_authorize(
         _authorize_single: mock.Mock,
         mut: Callable[[FunctionContext], PathResponse],
         check_has_manage: bool,
@@ -453,10 +454,11 @@ def test__add_asset_descendant_resources():
 ])
 @pytest.mark.parametrize('mut', [
     sut.authorize_upload,
+    sut.authorize_update,
     sut.authorize_download,
     sut.authorize_delete,
 ])
-def test_authorize_upload_download_delete_asset_integration(
+def test_authorize_asset_integration(
         mut: Callable[[FunctionContext], PathResponse],
         asset: FunctionResource,
         agent: FunctionResource,
