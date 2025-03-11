@@ -1,10 +1,31 @@
 """
 API that authorizes access to objects in object storage
 """
+import json
+from typing import TypedDict
 from ixoncdkingress.function.context import FunctionContext, FunctionResource
 from ixoncdkingress.function.objectstorage.types import ResourceType, PathMapping, PathResponse, \
     ListPathResponse, PathData
 
+class AssetAppResult(TypedDict):
+    """
+    The result of a request for asset app config objects
+    """
+
+    values: str
+    stateValues: str
+
+
+class ObjectMeta(TypedDict):
+    """
+    The metadata of an object in the object storage
+    """
+
+    id: str
+    name: str
+    order: int
+    size: int
+    type: str
 
 def _has_access_to_files_of_resource(
         company: FunctionResource,
@@ -58,23 +79,29 @@ def _create_mapping_for_resource(res: tuple[FunctionResource, ResourceType]):
     )
 
 def _create_multi_response(
-        resources: list[tuple[FunctionResource, ResourceType]]
-    ) -> ListPathResponse:
+    context: FunctionContext, resources: list[tuple[FunctionResource, ResourceType]]
+) -> ListPathResponse:
     """
     Creates a multi-path response, as is used by authorize_list
     """
-    mappings = map(_create_mapping_for_resource, resources)
+    mappings = list(map(_create_mapping_for_resource, resources))
+    mappings.extend(
+        _get_asset_app_config_object_mappings(
+            context,
+            [resource for resource, typ in resources if typ == ResourceType.ASSET],
+        )
+    )
 
     return ListPathResponse(
-        result='success',
-        data=list(mappings),
+        result="success",
+        data=mappings,
     )
 
 
 def _add_asset_descendant_resources(
     context: FunctionContext,
     resources: list[tuple[FunctionResource, ResourceType]],
-) -> None:
+) -> list[tuple[FunctionResource, ResourceType]]:
     """
     Adds all resources that are descendants of the given asset to the given resources list
     """
@@ -101,6 +128,50 @@ def _add_asset_descendant_resources(
             )
 
     resources.extend(children)
+    return resources
+
+def _get_asset_app_config_object_mappings(
+    context: FunctionContext,
+    asset_resources: list[FunctionResource],
+) -> list[PathMapping]:
+    """
+    Returns a list of all asset app config objects
+    """
+    if not context.template:
+        return []
+
+    pub_ids = [f'"{res.public_id}"' for res in asset_resources]
+    result = context.api_client.get(
+        "AssetAppConfigList",
+        query={
+            "filters": [
+                f'eq(app.publicId,"{context.template.public_id}")',
+                f'in(asset.publicId,{",".join(pub_ids)})',
+            ],
+            "fields": "values,stateValues",
+        },
+    )["data"]
+
+    return [
+        PathMapping(
+            publicId=None,
+            type=ResourceType.ASSET,
+            path=f"assets/{file}",
+        )
+        for app in result
+        if (files := _parse_asset_meta(app))
+        for file in files
+    ]
+
+
+def _parse_asset_meta(asset_app_config: AssetAppResult):
+    """
+    Parses the metadata of an asset
+    """
+    objects: list[ObjectMeta] = json.loads(asset_app_config.get("values") or "[]")
+    objects.extend(json.loads(asset_app_config.get("stateValues") or "[]"))
+
+    return [object["id"] for object in objects]
 
 
 def _request_for(context: FunctionContext) -> tuple[FunctionResource, ResourceType] | None:
@@ -124,7 +195,12 @@ def _request_for(context: FunctionContext) -> tuple[FunctionResource, ResourceTy
 
     return target, typ
 
-def _authorize_single(context: FunctionContext, check_has_manage: bool) -> PathResponse | None:
+def _authorize_single(
+    context: FunctionContext,
+    uuid: str | None,
+    check_has_manage: bool,
+    upload: bool = False,
+) -> PathResponse | None:
     if (target_typ := _request_for(context)) is None:
         return None
 
@@ -138,15 +214,31 @@ def _authorize_single(context: FunctionContext, check_has_manage: bool) -> PathR
         ):
         return None
 
+    if typ == ResourceType.ASSET and uuid:
+        if upload:
+            return PathResponse(result="success", data=PathData(path="assets/"))
+
+        mappings = _get_asset_app_config_object_mappings(
+            context,
+            [
+                target
+                for target, _ in _add_asset_descendant_resources(
+                    context, [(target, typ)]
+                )
+            ],
+        )
+        if f"assets/{uuid}" in [mapping["path"] for mapping in mappings]:
+            return PathResponse(result="success", data=PathData(path="assets/"))
+
     return _create_single_response(target, typ)
 
 @FunctionContext.expose
-def authorize_upload(context: FunctionContext) -> PathResponse | None:
+def authorize_upload(context: FunctionContext, uuid: str | None = None) -> PathResponse | None:
     """
     Method to validate if and where the caller is allowed
     to upload a blob to the object storage.
     """
-    return _authorize_single(context, True)
+    return _authorize_single(context, uuid, True, upload=True)
 
 @FunctionContext.expose
 def authorize_list(
@@ -169,28 +261,28 @@ def authorize_list(
 
     _add_asset_descendant_resources(context, resources)
 
-    return _create_multi_response(resources)
+    return _create_multi_response(context, resources)
 
 @FunctionContext.expose
-def authorize_download(context: FunctionContext) -> PathResponse | None:
+def authorize_download(context: FunctionContext, uuid: str | None = None) -> PathResponse | None:
     """
     Method to validate if and where the caller is allowed
     to download a blob from the object storage.
     """
-    return _authorize_single(context, False)
+    return _authorize_single(context, uuid, False)
 
 @FunctionContext.expose
-def authorize_update(context: FunctionContext) -> PathResponse | None:
+def authorize_update(context: FunctionContext, uuid: str | None = None) -> PathResponse | None:
     """
     Method to validate if and where the caller is allowed
     to update a blob in the object storage.
     """
-    return _authorize_single(context, True)
+    return _authorize_single(context, uuid, True)
 
 @FunctionContext.expose
-def authorize_delete(context: FunctionContext) -> PathResponse | None:
+def authorize_delete(context: FunctionContext, uuid: str | None = None) -> PathResponse | None:
     """
     Method to validate if and where the caller is allowed
     to delete a blob from the object storage.
     """
-    return _authorize_single(context, True)
+    return _authorize_single(context, uuid, True)

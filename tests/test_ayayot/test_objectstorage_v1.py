@@ -79,12 +79,17 @@ def test__create_multi_response(_format_path_for_resource: mock.Mock):
     res2.public_id = mock.sentinel.pubid2
     type2 = mock.sentinel.type2
 
+    # context = mock.create_autospec(spec=FunctionContext, spec_set=True, instance=True)
+    context = mock.create_autospec(spec=FunctionContext, instance=True)
+    context.api_client = mock.create_autospec(spec=ApiClient, instance=True)
+    context.template = None
+
     resources = [
         (res1, type1),
         (res2, type2),
     ]
 
-    output = mut(resources)
+    output = mut(context, resources)
 
     assert {
         'result': 'success',
@@ -169,7 +174,7 @@ def test__authorize_single(
     context = mock.create_autospec(spec=FunctionContext, instance=True)
     context.company = mock.create_autospec(spec=FunctionResource, instance=True)
 
-    output = mut(context, check_has_manage=check)
+    output = mut(context, None, check_has_manage=check)
 
     assert _create_single_response.return_value is output
 
@@ -200,7 +205,7 @@ def test__authorize_single_no_target(
 
     context = mock.create_autospec(spec=FunctionContext, instance=True)
 
-    assert None is mut(context, check_has_manage=mock.sentinel.check_has_manage)
+    assert None is mut(context, None, check_has_manage=mock.sentinel.check_has_manage)
 
     assert [
         mock.call(context)
@@ -223,7 +228,7 @@ def test__authorize_single_no_access(
 
     context = create_context_mock()
 
-    output = mut(context, check_has_manage=True)
+    output = mut(context, None, check_has_manage=True)
 
     assert None is output
 
@@ -240,18 +245,22 @@ def test__authorize_single_no_access(
 
     assert [] == _create_single_response.call_args_list
 
-@pytest.mark.parametrize('mut,check_has_manage', [
-    (sut.authorize_upload, True),
-    (sut.authorize_download, False),
-    (sut.authorize_update, True),
-    (sut.authorize_delete, True),
-])
+@pytest.mark.parametrize(
+    "mut,check_has_manage,extra_args",
+    [
+        (sut.authorize_upload, True, {"upload": True}),
+        (sut.authorize_download, False, {}),
+        (sut.authorize_update, True, {}),
+        (sut.authorize_delete, True, {}),
+    ],
+)
 @mock.patch('functions.ayayot.objectstorage_v1._authorize_single', autospec=True)
 def test_authorize(
-        _authorize_single: mock.Mock,
-        mut: Callable[[FunctionContext], PathResponse],
-        check_has_manage: bool,
-    ):
+    _authorize_single: mock.Mock,
+    mut: Callable[[FunctionContext], PathResponse],
+    check_has_manage: bool,
+    extra_args: dict[str, Any],
+):
     context = mock.create_autospec(spec=FunctionContext, instance=True)
 
     output = mut(context)
@@ -259,7 +268,7 @@ def test_authorize(
     assert _authorize_single.return_value is output
 
     assert [
-        mock.call(context, check_has_manage)
+        mock.call(context, None, check_has_manage, **extra_args)
     ] == _authorize_single.call_args_list
 
 @mock.patch('functions.ayayot.objectstorage_v1._create_multi_response', autospec=True)
@@ -283,7 +292,7 @@ def test_authorize_list_agent(
     ] == _request_for.call_args_list
 
     assert [
-        mock.call([(mock.sentinel.target, sut.ResourceType.AGENT)])
+        mock.call(context, [(mock.sentinel.target, sut.ResourceType.AGENT)])
     ] == _create_multi_response.call_args_list
 
 @mock.patch(
@@ -322,10 +331,13 @@ def test_authorize_list_asset_with_linked_agent(
     ] == _add_asset_descendant_resources.call_args_list
 
     assert [
-        mock.call([
-            (mock.sentinel.target, sut.ResourceType.ASSET),
-            (context.agent, sut.ResourceType.AGENT),
-        ])
+        mock.call(
+            context,
+            [
+                (mock.sentinel.target, sut.ResourceType.ASSET),
+                (context.agent, sut.ResourceType.AGENT),
+            ],
+        )
     ] == _create_multi_response.call_args_list
 
 @mock.patch(
@@ -358,9 +370,12 @@ def test_authorize_list_asset_without_linked_agent(
     ] == _add_asset_descendant_resources.call_args_list
 
     assert [
-        mock.call([
-            (mock.sentinel.target, sut.ResourceType.ASSET),
-        ])
+        mock.call(
+            context,
+            [
+                (mock.sentinel.target, sut.ResourceType.ASSET),
+            ],
+        )
     ] == _create_multi_response.call_args_list
 
 @mock.patch('functions.ayayot.objectstorage_v1._create_multi_response', autospec=True)
