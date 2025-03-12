@@ -14,7 +14,6 @@ def create_context_mock() -> Any:
     context.company = mock.create_autospec(spec=FunctionResource, instance=True)
     context.asset = mock.create_autospec(spec=FunctionResource, instance=True)
     context.agent = mock.create_autospec(spec=FunctionResource, instance=True)
-    
 
     return context
 
