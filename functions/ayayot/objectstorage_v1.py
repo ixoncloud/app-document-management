@@ -1,31 +1,33 @@
 """
 API that authorizes access to objects in object storage
 """
+from dataclasses import dataclass
 import json
-from typing import TypedDict
+from typing import Any
 from ixoncdkingress.function.context import FunctionContext, FunctionResource
 from ixoncdkingress.function.objectstorage.types import ResourceType, PathMapping, PathResponse, \
     ListPathResponse, PathData
 
-class AssetAppResult(TypedDict):
+@dataclass
+class AssetAppResult:
     """
     The result of a request for asset app config objects
     """
 
     values: str
-    stateValues: str
+    stateValues: str # pylint: disable=C0103
 
-
-class ObjectMeta(TypedDict):
+@dataclass
+class ObjectMeta:
     """
     The metadata of an object in the object storage
     """
 
     id: str
-    name: str
-    order: int
-    size: int
-    type: str
+    name: str | None = None
+    order: int | None = None
+    size: int | None = None
+    type: str | None = None
 
 def _has_access_to_files_of_resource(
         company: FunctionResource,
@@ -137,16 +139,16 @@ def _get_asset_app_config_object_mappings(
     """
     Returns a list of all asset app config objects
     """
-    if not context.template:
+    if not context.template or not asset_resources:
         return []
 
     pub_ids = [f'"{res.public_id}"' for res in asset_resources]
-    result = context.api_client.get(
+    result: list[dict[str, Any]] = context.api_client.get(
         "AssetAppConfigList",
         query={
             "filters": [
                 f'eq(app.publicId,"{context.template.public_id}")',
-                f'in(asset.publicId,{",".join(pub_ids)})',
+                f"in(asset.publicId,{','.join(pub_ids)})",
             ],
             "fields": "values,stateValues",
         },
@@ -159,19 +161,25 @@ def _get_asset_app_config_object_mappings(
             path=f"assets/{file}",
         )
         for app in result
-        if (files := _parse_asset_meta(app))
+        if (files := _parse_asset_meta(AssetAppResult(**app)))
         for file in files
     ]
 
 
-def _parse_asset_meta(asset_app_config: AssetAppResult):
+def _parse_asset_meta(asset_app_config: AssetAppResult | None) -> list[str]:
     """
     Parses the metadata of an asset
     """
-    objects: list[ObjectMeta] = json.loads(asset_app_config.get("values") or "[]")
-    objects.extend(json.loads(asset_app_config.get("stateValues") or "[]"))
+    if not asset_app_config:
+        return []
 
-    return [object["id"] for object in objects]
+    objects = [
+        ObjectMeta(**item) for item in json.loads(asset_app_config.values or "[]")
+    ] + [
+        ObjectMeta(**item) for item in json.loads(asset_app_config.stateValues or "[]")
+    ]
+
+    return [object.id for object in objects]
 
 
 def _request_for(context: FunctionContext) -> tuple[FunctionResource, ResourceType] | None:
@@ -215,8 +223,10 @@ def _authorize_single(
         return None
 
     if typ == ResourceType.ASSET and uuid:
+        path = f"assets/{uuid}/"
+
         if upload:
-            return PathResponse(result="success", data=PathData(path="assets/"))
+            return PathResponse(result="success", data=PathData(path=path))
 
         mappings = _get_asset_app_config_object_mappings(
             context,
@@ -228,7 +238,7 @@ def _authorize_single(
             ],
         )
         if f"assets/{uuid}" in [mapping["path"] for mapping in mappings]:
-            return PathResponse(result="success", data=PathData(path="assets/"))
+            return PathResponse(result="success", data=PathData(path=path))
 
     return _create_single_response(target, typ)
 
