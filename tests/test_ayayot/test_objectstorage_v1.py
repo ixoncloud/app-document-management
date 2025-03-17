@@ -1,4 +1,4 @@
-from typing import Callable
+from typing import Any, Callable
 from unittest import mock
 
 import pytest
@@ -8,6 +8,14 @@ from ixoncdkingress.function.objectstorage.types import PathResponse
 from ixoncdkingress.function.context import FunctionContext, FunctionResource
 
 from functions.ayayot import objectstorage_v1 as sut
+
+def create_context_mock() -> Any:
+    context = mock.create_autospec(spec=FunctionContext, instance=True)
+    context.company = mock.create_autospec(spec=FunctionResource, instance=True)
+    context.asset = mock.create_autospec(spec=FunctionResource, instance=True)
+    context.agent = mock.create_autospec(spec=FunctionResource, instance=True)
+
+    return context
 
 @pytest.mark.parametrize('company_perms,res_perms,expected', [
     (set(), set(), False),
@@ -102,7 +110,9 @@ def test__create_multi_response(_format_path_for_resource: mock.Mock):
 def test__request_for_agent():
     mut = sut._request_for
 
-    context = mock.create_autospec(spec=FunctionContext, spec_set=True, instance=True)
+    context = mock.create_autospec(spec=FunctionContext, instance=True)
+    context.agent = mock.create_autospec(spec=FunctionResource, instance=True)
+    context.company = mock.create_autospec(spec=FunctionResource, instance=True)
     context.asset = None
 
     output = mut(context)
@@ -112,7 +122,10 @@ def test__request_for_agent():
 def test__request_for_asset():
     mut = sut._request_for
 
-    context = mock.create_autospec(spec=FunctionContext, spec_set=True, instance=True)
+    context = mock.create_autospec(spec=FunctionContext, instance=True)
+    context.asset = mock.create_autospec(spec=FunctionResource, instance=True)
+    context.agent = mock.create_autospec(spec=FunctionResource, instance=True)
+    context.company = mock.create_autospec(spec=FunctionResource, instance=True)
 
     output = mut(context)
 
@@ -129,7 +142,8 @@ def test__request_for_no_company():
 def test__request_for_no_target():
     mut = sut._request_for
 
-    context = mock.create_autospec(spec=FunctionContext, spec_set=True, instance=True)
+    context = mock.create_autospec(spec=FunctionContext, instance=True)
+    context.company = mock.create_autospec(spec=FunctionResource, instance=True)
     context.agent = None
     context.asset = None
 
@@ -153,6 +167,7 @@ def test__authorize_single(
     _request_for.return_value = (mock.sentinel.target, mock.sentinel.type)
 
     context = mock.create_autospec(spec=FunctionContext, instance=True)
+    context.company = mock.create_autospec(spec=FunctionResource, instance=True)
 
     output = mut(context, check_has_manage=check)
 
@@ -206,7 +221,7 @@ def test__authorize_single_no_access(
     _request_for.return_value = (mock.sentinel.target, mock.sentinel.type)
     _has_access_to_files_of_resource.return_value = False
 
-    context = mock.create_autospec(spec=FunctionContext, instance=True)
+    context = create_context_mock()
 
     output = mut(context, check_has_manage=True)
 
@@ -286,6 +301,7 @@ def test_authorize_list_asset_with_linked_agent(
     _request_for.return_value = (mock.sentinel.target, sut.ResourceType.ASSET)
 
     context = mock.create_autospec(spec=FunctionContext, instance=True)
+    context.agent = mock.create_autospec(spec=FunctionResource, instance=True)
 
     output = mut(context)
 
@@ -465,7 +481,7 @@ def test_authorize_asset_integration(
         asset_perms: set[str],
         company_perms: set[str],
     ):
-    context = mock.create_autospec(spec=FunctionContext, spec_set=True, instance=True)
+    context = create_context_mock()
 
     context.company.permissions = company_perms
     context.asset = asset
@@ -489,7 +505,7 @@ def test_authorize_asset_integration(
 def test_authorize_upload_delete_asset_no_permission_integration(
         mut: Callable[[FunctionContext], PathResponse],
     ):
-    context = mock.create_autospec(spec=FunctionContext, spec_set=True, instance=True)
+    context = create_context_mock()
 
     context.asset = FunctionResource(
         public_id='assetpubid01',
@@ -524,7 +540,7 @@ def test_authorize_list_agent_integration(
     ):
     mut = sut.authorize_list
 
-    context = mock.create_autospec(spec=FunctionContext, spec_set=True, instance=True)
+    context = create_context_mock()
     context.company.permissions = company_perms
     context.asset = None
     context.agent.public_id = 'agentpubid01'
@@ -547,7 +563,7 @@ def test_authorize_list_agent_integration(
 def test_authorize_list_asset_with_linked_agent_integration():
     mut = sut.authorize_list
 
-    context = mock.create_autospec(spec=FunctionContext, instance=True)
+    context = create_context_mock()
     context.api_client = mock.create_autospec(spec=ApiClient, instance=True)
 
     context.asset.public_id = 'assetpubid01'
@@ -575,7 +591,7 @@ def test_authorize_list_asset_with_linked_agent_integration():
 def test_authorize_list_asset_without_linked_agent_integration():
     mut = sut.authorize_list
 
-    context = mock.create_autospec(spec=FunctionContext, instance=True)
+    context = create_context_mock()
     context.api_client = mock.create_autospec(spec=ApiClient, instance=True)
 
     context.asset.public_id = 'assetpubid01'
@@ -600,7 +616,7 @@ def test_authorize_list_asset_without_linked_agent_integration():
 def test_authorize_list_asset_with_other_assets():
     mut = sut.authorize_list
 
-    context = mock.create_autospec(spec=FunctionContext, instance=True)
+    context = create_context_mock()
     context.api_client = mock.create_autospec(spec=ApiClient, instance=True)
 
     context.asset.public_id = "assetpubid01"
