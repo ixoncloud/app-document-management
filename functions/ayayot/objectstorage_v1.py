@@ -161,7 +161,10 @@ def _get_asset_app_config_object_mappings(
             path=f"assets/{file}",
         )
         for app in result
-        if (files := _parse_asset_meta(AssetAppResult(**app)))
+        if (files := _parse_asset_meta(AssetAppResult(
+            values=app["values"],
+            stateValues=app["stateValues"],
+        )))
         for file in files
     ]
 
