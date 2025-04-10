@@ -28,6 +28,27 @@ class ObjectMeta:
     order: int | None = None
     size: int | None = None
     type: str | None = None
+    category: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ObjectMeta | None":
+        """
+        Creates an ObjectMeta instance from a dictionary
+
+        Returns None if it cannot be parsed
+        """
+        try:
+            return cls(
+                id=data["id"],
+                name=data.get("name"),
+                order=data.get("order"),
+                size=data.get("size"),
+                type=data.get("type"),
+                category=data.get("category"),
+            )
+        except (KeyError, ValueError):
+            return None
+
 
 def _has_access_to_files_of_resource(
         company: FunctionResource,
@@ -177,12 +198,14 @@ def _parse_asset_meta(asset_app_config: AssetAppResult | None) -> list[str]:
         return []
 
     objects = [
-        ObjectMeta(**item) for item in json.loads(asset_app_config.values or "[]")
+        ObjectMeta.from_dict(item)
+        for item in json.loads(asset_app_config.values or "[]")
     ] + [
-        ObjectMeta(**item) for item in json.loads(asset_app_config.stateValues or "[]")
+        ObjectMeta.from_dict(item)
+        for item in json.loads(asset_app_config.stateValues or "[]")
     ]
 
-    return [object.id for object in objects]
+    return [object.id for object in objects if object]
 
 
 def _request_for(context: FunctionContext) -> tuple[FunctionResource, ResourceType] | None:

@@ -903,3 +903,36 @@ def test__authorize_single_with_upload(
     ] == _has_access_to_files_of_resource.call_args_list
 
     assert [] == _create_single_response.call_args_list
+
+def test_ObjectMeta_from_dict():
+    mut = sut.ObjectMeta.from_dict
+
+    data = {
+        "id": "id",
+        "name": "name",
+        "order": "order",
+        "size": "size",
+        "type": "type",
+        "category": "category",
+    }
+
+    out_put = mut(data)
+
+    assert out_put
+
+    assert data["id"] == out_put.id
+    assert data["name"] == out_put.name
+    assert data["order"] == out_put.order
+    assert data["size"] == out_put.size
+    assert data["type"] == out_put.type
+    assert data["category"] == out_put.category
+
+
+def test_ObjectMeta_from_dict_none():
+    mut = sut.ObjectMeta.from_dict
+
+    data = {}
+
+    out_put = mut(data)
+
+    assert out_put is None
